@@ -2,18 +2,24 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
-const repoRoot = new URL('..', import.meta.url).pathname;
+const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const guardScript = join(repoRoot, 'scripts', 'check-child-surface.mjs');
 
-function makeFixture({ playground, routes = "{ path: '/playgrounds' }" }) {
+function makeFixture({ playground, routes = "export const appRoutes = [{ path: '/playgrounds' }];", files = {} }) {
   const root = mkdtempSync(join(tmpdir(), 'bdu-child-surface-'));
   mkdirSync(join(root, 'src', 'pages'), { recursive: true });
   mkdirSync(join(root, 'src', 'app'), { recursive: true });
   writeFileSync(join(root, 'src', 'pages', 'PlaygroundsPage.tsx'), playground);
   writeFileSync(join(root, 'src', 'app', 'routes.tsx'), routes);
+  for (const [path, content] of Object.entries(files)) {
+    const fullPath = join(root, path);
+    mkdirSync(join(fullPath, '..'), { recursive: true });
+    writeFileSync(fullPath, content);
+  }
   return root;
 }
 
@@ -73,11 +79,83 @@ test('rejects checkout controls rendered on the child surface', (t) => {
   assert.match(result.stderr, /prohibited commerce control/i);
 });
 
+test('rejects checkout controls rendered by a nested child component', (t) => {
+  const root = makeFixture({
+    playground: `
+      import { ActivityCard } from '../components/ActivityCard';
+      export function PlaygroundsPage() {
+        return <><h2>Free Play</h2><ActivityCard /></>;
+      }
+    `,
+    files: {
+      'src/components/ActivityCard.tsx': `
+        export function ActivityCard() {
+          return <button data-action="checkout">Buy now</button>;
+        }
+      `,
+    },
+  });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const result = runGuard(root);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /prohibited commerce control/i);
+});
+
+test('rejects named checkout components and checkout handlers', (t) => {
+  const root = makeFixture({
+    playground: `
+      export function PlaygroundsPage() {
+        return <><h2>Free Play</h2><CheckoutButton /><button onClick={checkout}>Continue</button></>;
+      }
+    `,
+  });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const result = runGuard(root);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /prohibited commerce control/i);
+});
+
+test('rejects buy-now text inside a native control', (t) => {
+  const root = makeFixture({
+    playground: `
+      export function PlaygroundsPage() {
+        return <><h2>Free Play</h2><button>Buy now</button></>;
+      }
+    `,
+  });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const result = runGuard(root);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /prohibited commerce control/i);
+});
+
 test('rejects a required child email field on the child surface', (t) => {
   const root = makeFixture({
     playground: `
       export function PlaygroundsPage() {
         return <><h2>Free Play</h2><input type="email" required /></>;
+      }
+    `,
+  });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const result = runGuard(root);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /prohibited child identity requirement/i);
+});
+
+test('rejects brace-wrapped required child email fields', (t) => {
+  const root = makeFixture({
+    playground: `
+      export function PlaygroundsPage() {
+        return <><h2>Free Play</h2><input type={"email"} required /></>;
       }
     `,
   });
@@ -119,6 +197,28 @@ test('rejects removal of the public playgrounds route', (t) => {
   const result = runGuard(root);
 
   assert.equal(result.status, 1);
+  assert.match(result.stderr, /missing \/playgrounds route/i);
+});
+
+test('does not accept commented free-play or playground-route text', (t) => {
+  const root = makeFixture({
+    playground: `
+      // <h2>Free Play</h2>
+      export function PlaygroundsPage() {
+        return <article><h2>Patron Extras</h2></article>;
+      }
+    `,
+    routes: `
+      // export const appRoutes = [{ path: '/playgrounds' }];
+      export const appRoutes = [{ path: '/marketplace' }];
+    `,
+  });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const result = runGuard(root);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /missing free-play path/i);
   assert.match(result.stderr, /missing \/playgrounds route/i);
 });
 
