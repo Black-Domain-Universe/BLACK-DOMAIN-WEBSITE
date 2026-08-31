@@ -2,7 +2,6 @@ name: CSS Quality
 
 on:
   pull_request:
-    branches: [EL]
   push:
     branches: [EL]
 
@@ -10,18 +9,15 @@ permissions:
   contents: read
 
 jobs:
-  lint-css:
-    name: Stylelint
+  css-quality:
+    name: css-quality
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Use Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
           cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Lint CSS
-        run: npm run lint:css
+      - run: npm ci
+      - run: npm run lint:css
+      - run: npm run build

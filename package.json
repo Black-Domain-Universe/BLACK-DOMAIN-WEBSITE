@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "lint:css": "stylelint \"src/**/*.css\" --max-warnings 0",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint:css": "stylelint \"**/*.css\" --max-warnings 0"
   },
   "dependencies": {
     "react": "18.3.1",
