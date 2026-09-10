@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "test": "node --test tests/*.test.mjs",
+    "guard:child-surface": "node scripts/check-child-surface.mjs",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "lint:css": "stylelint \"**/*.css\" --max-warnings 0"

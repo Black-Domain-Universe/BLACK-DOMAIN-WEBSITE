@@ -1,0 +1,27 @@
+name: Child Surface Guard
+
+on:
+  pull_request:
+  push:
+    branches: [EL]
+
+permissions:
+  contents: read
+
+jobs:
+  child-surface-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run structural guard tests
+        run: node --test tests/child-surface-guard.test.mjs
+
+      - name: Verify current child surface
+        run: node scripts/check-child-surface.mjs
